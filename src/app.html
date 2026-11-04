@@ -121,6 +121,11 @@ label.f{display:block;font-size:13px;font-weight:650;color:var(--muted);margin:1
 .ord{display:flex;gap:2px}
 .ord button{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
 .ord button svg{width:18px;height:18px}
+.grip{width:30px;height:38px;display:grid;place-items:center;color:var(--muted);touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;cursor:grab;flex:none}
+.grip svg{width:20px;height:20px}
+.dragging{position:relative;z-index:20;background:var(--card);box-shadow:0 10px 30px rgba(0,0,0,.25);border-radius:12px;opacity:.97;transition:none!important}
+body.dnd{-webkit-user-select:none;user-select:none}
+.defs{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:8px}
 /* calendar */
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
 .cal .h{font-size:11px;font-weight:700;color:var(--muted);padding:4px 0}
@@ -163,6 +168,7 @@ const I = {
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
   down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  grip:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
 };
 
@@ -392,18 +398,19 @@ function renderPrograms(m){
 function renderEditor(m){
   const p = S.programs.find(x => x.id === V.edit);
   if (!p){ V.edit = null; return render(); }
+  p.days.forEach(d => { d.id = d.id || uid(); d.items.forEach(it => { it.id = it.id || uid(); }); });
   header(p.id === S.activeId ? 'Programme actif' : 'Programme', { back:'closeedit' });
   m.innerHTML = `<label class="f">Nom du programme</label><input data-pf="name" value="${esc(p.name)}" placeholder="Ex. Push / Pull / Legs">` +
-    p.days.map((d, di) => `<div class="card" style="margin-top:14px">
-      <div class="row"><input data-df="name" data-di="${di}" value="${esc(d.name)}" placeholder="Nom de la séance" style="font-weight:700;font-size:17px">
-        <div class="ord"><button data-a="dayup" data-di="${di}" aria-label="Monter">${I.up}</button><button data-a="daydel" data-di="${di}" aria-label="Supprimer la séance" style="color:var(--danger)">${I.trash}</button></div></div>
-      ${d.items.map((it, ii) => { const ex = exById(it.exId); return `<div class="item-ed">
-        <div class="row"><button data-a="ex" data-e="${esc(ex.id)}">${thumb(ex)}</button><div class="grow"><div style="font-weight:650;font-size:15px">${esc(ex.n)}</div><div class="tiny muted">${esc(ex.m)}</div></div>
-          <div class="ord"><button data-a="itup" data-di="${di}" data-ii="${ii}" aria-label="Monter">${I.up}</button><button data-a="itdown" data-di="${di}" data-ii="${ii}" aria-label="Descendre">${I.down}</button><button data-a="itdel" data-di="${di}" data-ii="${ii}" aria-label="Retirer">${I.close}</button></div></div>
+    p.days.map((d, di) => `<div class="card dayc" data-did="${d.id}" style="margin-top:14px">
+      <div class="row"><span class="grip" data-drag="day" aria-label="Déplacer la séance">${I.grip}</span><input data-df="name" data-di="${di}" value="${esc(d.name)}" placeholder="Nom de la séance" style="font-weight:700;font-size:17px">
+        <div class="ord"><button data-a="daydel" data-di="${di}" aria-label="Supprimer la séance" style="color:var(--danger)">${I.trash}</button></div></div>
+      <div class="items" data-di="${di}">${d.items.map((it, ii) => { const ex = exById(it.exId); return `<div class="item-ed" data-iid="${it.id}">
+        <div class="row"><span class="grip" data-drag="item" aria-label="Déplacer l'exercice">${I.grip}</span><button data-a="ex" data-e="${esc(ex.id)}">${thumb(ex)}</button><div class="grow"><div style="font-weight:650;font-size:15px">${esc(ex.n)}</div><div class="tiny muted">${esc(ex.m)}</div></div>
+          <div class="ord"><button data-a="itdel" data-di="${di}" data-ii="${ii}" aria-label="Retirer">${I.close}</button></div></div>
         <div class="mini"><div><label>Séries</label><input inputmode="numeric" data-if="sets" data-di="${di}" data-ii="${ii}" value="${esc(it.sets)}"></div>
           <div><label>Reps</label><input data-if="reps" data-di="${di}" data-ii="${ii}" value="${esc(it.reps)}" placeholder="8-10"></div>
           <div><label>Repos</label><select data-if="rest" data-di="${di}" data-ii="${ii}">${RESTS.map(r => `<option value="${r}" ${+it.rest===r?'selected':''}>${restLbl(r)}</option>`).join('')}</select></div></div>
-      </div>`; }).join('')}
+      </div>`; }).join('')}</div>
       <div class="sp"></div><button class="btn block" data-a="pick" data-di="${di}">+ Ajouter des exercices</button></div>`).join('') +
     `<div class="sp"></div><button class="btn block primary" data-a="addday">+ Ajouter une séance</button>
      ${p.id !== S.activeId ? `<div class="sp"></div><button class="btn block" data-a="activate" data-p="${p.id}">Définir comme programme actif</button>` : ''}`;
@@ -508,6 +515,11 @@ function settingsSheet(){
   const t = S.settings.theme || 'auto';
   const st = { ok:'Synchronisé : tes données sont enregistrées dans ton espace privé et une copie reste sur cet appareil.', off:"Hors ligne pour l'instant : les changements sont gardés sur cet appareil et seront envoyés dès que possible.", local:'Tes données sont enregistrées sur cet appareil. Exporte une sauvegarde de temps en temps (avant de changer de téléphone, par exemple).', wait:'Connexion en cours…' }[sync];
   openSheet('Réglages', `<label class="f">Apparence</label><div class="seg">${[['auto','Auto'],['light','Clair'],['dark','Sombre']].map(([k,l]) => `<button class="${t===k?'on':''}" data-a="theme" data-v="${k}">${l}</button>`).join('')}</div>
+    <label class="f">Valeurs par défaut des nouveaux exercices</label>
+    <div class="mini defs"><div><label>Séries</label><input inputmode="numeric" data-sf="defSets" value="${esc(defaults().sets)}"></div>
+      <div><label>Reps</label><input data-sf="defReps" value="${esc(defaults().reps)}" placeholder="8-12"></div>
+      <div><label>Repos</label><select data-sf="defRest">${RESTS.map(r => `<option value="${r}" ${defaults().rest===r?'selected':''}>${restLbl(r)}</option>`).join('')}</select></div></div>
+    <p class="tiny muted" style="margin:6px 0 0">Utilisées quand tu ajoutes un exercice à une séance. Les exercices déjà dans tes programmes ne changent pas.</p>
     <label class="f">Données</label><div class="card small" style="margin-bottom:10px"><div class="row"><span class="dot ${sync==='ok'?'ok':sync==='off'?'off':''}"></span><span class="grow">${st}</span></div></div>
     <button class="btn block" data-a="export">Exporter une sauvegarde</button><div class="sp"></div>
     <label class="btn block" style="cursor:pointer">Importer une sauvegarde<input type="file" accept=".json,application/json" id="importfile" hidden></label>
@@ -537,8 +549,9 @@ function drawTimer(){
 }
 
 /* ---------- actions ---------- */
+// Defaults applied to exercises newly added to a program (Settings → "Valeurs par défaut")
+function defaults(){ const s = S.settings; return { sets: parseInt(s.defSets) || 3, reps: String(s.defReps || '').trim() || '8-12', rest: RESTS.includes(+s.defRest) ? +s.defRest : 90 }; }
 function prog(){ return S.programs.find(x => x.id === V.edit); }
-function move(arr, i, d){ const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; }
 const keepScroll = fn => { const y = window.scrollY; fn(); window.scrollTo(0, y); };
 
 const A = {
@@ -559,11 +572,8 @@ const A = {
   delprog(el){ A._del = el.dataset.p; confirmSheet('Supprimer ce programme ?', "Le programme sera effacé. L'historique de tes séances est conservé.", 'Supprimer', 'dodelprog'); },
   dodelprog(){ S.programs = S.programs.filter(p => p.id !== A._del); if (S.activeId === A._del) S.activeId = null; persist('state'); closeSheet(); render(); },
   addday(){ const p = prog(); p.days.push({ id:uid(), name:'Séance ' + String.fromCharCode(65 + p.days.length), items:[] }); persist('state'); keepScroll(render); },
-  dayup(el){ const p = prog(); move(p.days, +el.dataset.di, -1); persist('state'); keepScroll(render); },
   daydel(el){ A._dd = +el.dataset.di; confirmSheet('Supprimer cette séance ?', 'Les exercices de cette séance seront retirés du programme.', 'Supprimer', 'dodaydel'); },
   dodaydel(){ prog().days.splice(A._dd, 1); persist('state'); closeSheet(); keepScroll(render); },
-  itup(el){ move(prog().days[+el.dataset.di].items, +el.dataset.ii, -1); persist('state'); keepScroll(render); },
-  itdown(el){ move(prog().days[+el.dataset.di].items, +el.dataset.ii, 1); persist('state'); keepScroll(render); },
   itdel(el){ prog().days[+el.dataset.di].items.splice(+el.dataset.ii, 1); persist('state'); keepScroll(render); },
   pick(el){ openPicker(+el.dataset.di); },
   toggpick(el){
@@ -573,7 +583,7 @@ const A = {
   },
   pickdone(){
     const d = prog().days[pickDay];
-    PICK.forEach(id => d.items.push({ id:uid(), exId:id, sets:3, reps:'8-12', rest:90 }));
+    const df = defaults(); PICK.forEach(id => d.items.push({ id:uid(), exId:id, sets:df.sets, reps:df.reps, rest:df.rest }));
     persist('state'); closeSheet(); keepScroll(render);
     if (PICK.size) toast(`${PICK.size} exercice${PICK.size>1?'s':''} ajouté${PICK.size>1?'s':''}`);
   },
@@ -666,6 +676,10 @@ document.addEventListener('input', e => {
     clearTimeout(inputT); inputT = setTimeout(() => persist('current'), 600);
   } else if (ds.pf){ prog().name = el.value; clearTimeout(inputT); inputT = setTimeout(() => persist('state'), 600); }
   else if (ds.df){ prog().days[+ds.di].name = el.value; clearTimeout(inputT); inputT = setTimeout(() => persist('state'), 600); }
+  else if (ds.sf){
+    S.settings[ds.sf] = ds.sf === 'defReps' ? el.value : ds.sf === 'defRest' ? +el.value : (parseInt(el.value) || '');
+    clearTimeout(inputT); inputT = setTimeout(() => persist('state'), 600);
+  }
   else if (ds.if){
     const it = prog().days[+ds.di].items[+ds.ii];
     it[ds.if] = ds.if === 'sets' ? (parseInt(el.value) || '') : ds.if === 'rest' ? +el.value : el.value;
@@ -694,6 +708,69 @@ document.addEventListener('change', e => {
   }
 });
 window.addEventListener('beforeunload', () => { lsSave(); });
+
+/* ---------- drag & drop reordering in the program editor ----------
+   Press the grip handle and drag: exercises can move within a session or to another
+   session; whole sessions can be reordered. The DOM is reordered live, and the new
+   order is read back from the DOM into the program on release. */
+let D = null;
+document.addEventListener('pointerdown', e => {
+  const g = e.target.closest('[data-drag]'); if (!g || D) return;
+  const kind = g.dataset.drag, el = g.closest(kind === 'day' ? '.dayc' : '.item-ed'); if (!el) return;
+  e.preventDefault();
+  try{ g.setPointerCapture(e.pointerId); }catch(err){}
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  D = { kind, el, g, pid:e.pointerId, y:e.clientY, grab:e.clientY - el.getBoundingClientRect().top, raf:0 };
+  el.classList.add('dragging'); document.body.classList.add('dnd');
+  if (navigator.vibrate) try{ navigator.vibrate(10); }catch(err){}
+  const loop = () => { if (!D) return; const h = window.innerHeight, edge = 80;
+    const v = D.y < edge ? -(edge - D.y) / 4 : D.y > h - edge - 60 ? (D.y - (h - edge - 60)) / 4 : 0;
+    if (v){ window.scrollBy(0, v); dragMove(); } D.raf = requestAnimationFrame(loop); };
+  D.raf = requestAnimationFrame(loop);
+});
+function dragMove(){
+  const { el, kind, y } = D;
+  el.style.transform = '';
+  if (kind === 'day'){
+    const list = [...document.querySelectorAll('.dayc')].filter(x => x !== el);
+    const after = list.find(x => { const r = x.getBoundingClientRect(); return y < r.top + r.height / 2; });
+    const par = el.parentNode;
+    if (after){ if (el.nextElementSibling !== after) par.insertBefore(el, after); }
+    else { const last = list[list.length - 1]; if (last && last.nextElementSibling !== el) last.after(el); }
+  } else {
+    const boxes = [...document.querySelectorAll('.items')];
+    // pick the session whose card is under the finger (or the nearest one)
+    let box = boxes.find(b => { const r = b.closest('.dayc').getBoundingClientRect(); return y >= r.top && y <= r.bottom; });
+    if (!box) box = y < boxes[0].closest('.dayc').getBoundingClientRect().top ? boxes[0] : boxes[boxes.length - 1];
+    const list = [...box.querySelectorAll('.item-ed')].filter(x => x !== el);
+    const after = list.find(x => { const r = x.getBoundingClientRect(); return y < r.top + r.height / 2; });
+    if (after){ if (el.nextElementSibling !== after || el.parentNode !== box) box.insertBefore(el, after); }
+    else if (el.parentNode !== box || el.nextElementSibling) box.appendChild(el);
+  }
+  // keep the dragged block under the finger
+  el.style.transform = `translateY(${y - D.grab - el.getBoundingClientRect().top}px)`;
+}
+document.addEventListener('pointermove', e => { if (!D || e.pointerId !== D.pid) return; e.preventDefault(); D.y = e.clientY; dragMove(); }, { passive:false });
+function dragEnd(e){
+  if (!D || (e && e.pointerId !== D.pid)) return;
+  cancelAnimationFrame(D.raf);
+  const { kind } = D; D.el.classList.remove('dragging'); D.el.style.transform = ''; document.body.classList.remove('dnd'); D = null;
+  const p = prog(); if (!p) return;
+  if (kind === 'day'){
+    const ids = [...document.querySelectorAll('.dayc')].map(x => x.dataset.did);
+    p.days.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  } else {
+    const all = {}; p.days.forEach(d => d.items.forEach(it => all[it.id] = it));
+    document.querySelectorAll('.items').forEach(b => {
+      const d = p.days[+b.dataset.di]; if (d) d.items = [...b.querySelectorAll('.item-ed')].map(x => all[x.dataset.iid]).filter(Boolean);
+    });
+  }
+  persist('state'); keepScroll(render);
+}
+document.addEventListener('pointerup', dragEnd);
+document.addEventListener('pointercancel', dragEnd);
+// iOS: stop the page from scrolling while a drag is in progress
+document.addEventListener('touchmove', e => { if (D) e.preventDefault(); }, { passive:false });
 
 /* ---------- boot ---------- */
 lsLoad(); sortLogs(); applyTheme(); render();

@@ -42,7 +42,10 @@ Read this before changing anything; it records the decisions made so far and why
 ## Features chosen by the owner (and ones deliberately left out)
 - In: several workout days per program; sets/reps/rest targets; workout log (kg × reps)
   pre-filled from last time; rest timer with beep (±15 s); "last time" reminder;
-  custom exercises with optional photo; dark mode (auto/light/dark); history calendar.
+  custom exercises with optional photo; dark mode (auto/light/dark); history calendar;
+  drag & drop (grip handle) to reorder sessions and exercises in the program editor, including
+  moving an exercise to another session (replaced the up/down arrows);
+  Settings → default sets / reps / rest for newly added exercises (`settings.defSets/defReps/defRest`).
 - Out for now (owner didn't pick them): search box, muscle/equipment filters, favourites,
   duplicate program, per-exercise notes in programs, progression charts, 1RM estimate.
   The library is just grouped by muscle with jump chips.
