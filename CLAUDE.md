@@ -15,7 +15,13 @@ Read this before changing anything; it records the decisions made so far and why
   `python3 src/build.py` injects `src/exercises.json` into it and writes `index.html`.
   **Never edit `index.html` by hand** — edit `src/app.html` and rebuild.
 - `build.py` also bumps the cache name in `sw.js` so installed copies update.
-- PWA: `manifest.webmanifest`, icons, `sw.js` (stale-while-revalidate cache, works offline).
+- PWA: `manifest.webmanifest`, icons, `sw.js`. The page is network-first (3 s timeout, then the
+  cached copy, so it works offline); other files are cache-first. Stale-while-revalidate for the page
+  meant iOS kept showing the old version, which is why this changed.
+- Updates: `build.py` bakes the same number into the page as `APP_VER`. The app compares it with
+  the server's `sw.js` on launch / return to foreground and shows a "Nouvelle version" banner;
+  Settings → "Mettre à jour l'app" unregisters the SW, clears caches and reloads (data untouched).
+- Reinstalling the home-screen icon wipes its storage on iOS: never suggest that as an update method.
   Installed via Safari → Share → Add to Home Screen.
 
 ## Data

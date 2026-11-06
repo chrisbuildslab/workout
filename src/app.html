@@ -135,6 +135,9 @@ body.dnd{-webkit-user-select:none;user-select:none}
 .cal .d.has{background:var(--accent);color:var(--accent-ink)}
 .cal .d.sel{outline:2px solid var(--ink)}
 .cal .d .n{font-size:9px;opacity:.85}
+.upd{position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));z-index:79;max-width:616px;margin:0 auto;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.upd button{background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:8px 12px;font-weight:700}
+.upd .x{background:none;color:inherit;opacity:.7;padding:8px}
 .toast{position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:80;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;max-width:90vw;animation:fade .2s}
 .sp{height:8px}
 .hist-ex{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
@@ -147,7 +150,7 @@ body.dnd{-webkit-user-select:none;user-select:none}
 <nav class="tabs" id="tabs"></nav>
 <div id="timer"></div>
 <div id="sheet"></div>
-<div id="toast"></div>
+<div id="toast"></div><div id="upd"></div>
 <script id="exdata" type="application/json">__EXDATA__</script>
 <script>
 "use strict";
@@ -523,7 +526,9 @@ function settingsSheet(){
     <label class="f">Données</label><div class="card small" style="margin-bottom:10px"><div class="row"><span class="dot ${sync==='ok'?'ok':sync==='off'?'off':''}"></span><span class="grow">${st}</span></div></div>
     <button class="btn block" data-a="export">Exporter une sauvegarde</button><div class="sp"></div>
     <label class="btn block" style="cursor:pointer">Importer une sauvegarde<input type="file" accept=".json,application/json" id="importfile" hidden></label>
-    <p class="tiny muted" style="margin-top:14px">${S.programs.length} programme(s) · ${S.logs.length} séance(s) · ${S.custom.length} exercice(s) perso</p>`);
+    <label class="f">Application</label>
+    <button class="btn block" data-a="update">Mettre à jour l'app</button>
+    <p class="tiny muted" style="margin-top:14px">Version ${APP_VER} · ${S.programs.length} programme(s) · ${S.logs.length} séance(s) · ${S.custom.length} exercice(s) perso</p>`);
 }
 
 /* ---------- rest timer ---------- */
@@ -709,6 +714,41 @@ document.addEventListener('change', e => {
 });
 window.addEventListener('beforeunload', () => { lsSave(); });
 
+/* ---------- app updates ----------
+   APP_VER is baked in by build.py and equals the cache number in sw.js. Comparing it with the
+   sw.js on the server tells us whether a newer version has been published. */
+const APP_VER = __APPVER__;
+async function latestVer(){
+  const r = await fetch('sw.js?t=' + Date.now(), { cache:'no-store' });
+  const m = (await r.text()).match(/workout-v(\d+)/); return m ? +m[1] : 0;
+}
+let updChecked = 0;
+async function checkUpdate(){
+  if (location.protocol !== 'https:' || Date.now() - updChecked < 60000) return;
+  updChecked = Date.now();
+  try{ if (await latestVer() > APP_VER) $('#upd').innerHTML = `<div class="upd"><span class="grow">Nouvelle version disponible</span><button data-a="doupdate">Mettre à jour</button><button class="x" data-a="hideupd" aria-label="Plus tard">${I.close}</button></div>`; }catch(e){}
+}
+async function doUpdate(){
+  toast('Mise à jour…'); lsSave();
+  let v = Date.now();
+  try{ v = await latestVer() || v; }catch(e){}
+  try{ const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); }catch(e){}
+  try{ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }catch(e){}
+  // the query string bypasses any HTTP-cached copy of the page; it is removed again on load
+  location.replace(location.pathname + '?v=' + v);
+}
+Object.assign(A, {
+  async update(){
+    if (location.protocol !== 'https:'){ toast('Mise à jour indisponible ici'); return; }
+    let v = 0; try{ v = await latestVer(); }catch(e){ toast('Pas de connexion : réessaie plus tard'); return; }
+    if (v > APP_VER) doUpdate();
+    else { toast(`L'app est à jour (version ${APP_VER})`); }
+  },
+  doupdate(){ doUpdate(); },
+  hideupd(){ $('#upd').innerHTML = ''; },
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+
 /* ---------- drag & drop reordering in the program editor ----------
    Press the grip handle and drag: exercises can move within a session or to another
    session; whole sessions can be reordered. The DOM is reordered live, and the new
@@ -775,7 +815,9 @@ document.addEventListener('touchmove', e => { if (D) e.preventDefault(); }, { pa
 /* ---------- boot ---------- */
 lsLoad(); sortLogs(); applyTheme(); render();
 setTimeout(initRemote, 0);
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if (location.search.includes('v=')) history.replaceState(null, '', location.pathname);
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache:'none' }).catch(() => {});
+setTimeout(checkUpdate, 1500);
 try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
 </script>
 </body>
